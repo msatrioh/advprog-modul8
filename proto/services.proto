@@ -9,12 +9,12 @@ service PaymentService {
 
 // Service for checking transaction history
 service TransactionService {
-    rpc GetTransactionHistory(TransactionRequest) returns (stream TransactionResponse)
+    rpc GetTransactionHistory(TransactionRequest) returns (stream TransactionResponse);
 }
 
 // Service for chatting with a customer service bot
 service ChatService {
-    rpc SendMessage(ChatMessage) returns (ChatMessage);
+    rpc Chat(stream ChatMessage) returns (stream ChatMessage);
 }
 
 message PaymentRequest {
@@ -23,7 +23,7 @@ message PaymentRequest {
 }
 
 message PaymentResponse {
-    string success = 1;
+    bool success = 1;
 }
 
 message TransactionRequest {
@@ -32,8 +32,8 @@ message TransactionRequest {
 
 message TransactionResponse {
     string transaction_id = 1;
-    double status = 2;
-    string amount = 3;
+    string status = 2;
+    double amount = 3;
     string timestamp = 4;
 }
 

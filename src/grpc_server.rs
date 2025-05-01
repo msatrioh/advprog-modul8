@@ -15,15 +15,9 @@ use services::{payment_service_server::{PaymentService, PaymentServiceServer}, P
 #[derive(Default)]
 pub struct MyPaymentService {}
 
-#[derive(Default)]
-pub struct MyTransactionService {}
-
-#[derive(Default)]
-pub struct MyChatService {}
-
 #[tonic::async_trait]
 impl PaymentService for MyPaymentService {
-    async fn get_transaction_history(
+    async fn process_payment(
         &self,
         request: Request<PaymentRequest>,
     ) -> Result<Response<PaymentResponse>, Status> {
@@ -31,17 +25,21 @@ impl PaymentService for MyPaymentService {
 
         // Process the request and return a response
         // This example immediately returns a success result for demonstration purposes
-        Ok(Response::new(PaymentResponse {
-            success: true }))
+        Ok(Response::new(PaymentResponse { success: true }))
     }
 }
 
+#[derive(Default)]
+pub struct MyTransactionService {}
+
 #[tonic::async_trait]
 impl TransactionService for MyTransactionService {
-    async fn process_transaction(
+    type GetTransactionHistoryStream = ReceiverStream<Result<TransactionResponse, Status>>;
+    
+    async fn get_transaction_history(
         &self,
         request: Request<TransactionRequest>,
-    ) -> Result<Response<TransactionResponse>, Status> {
+    ) -> Result<Response<Self::GetTransactionHistoryStream>, Status> {
         println!("Received transaction request: {:?}", request);
         let (tx, rx): (Sender<Result<TransactionResponse, Status>>, Receiver<Result<TransactionResponse, Status>>) = mpsc::channel(4);
 
@@ -49,7 +47,7 @@ impl TransactionService for MyTransactionService {
             for i in 0..30 {    // Simulate sending 30 transaction records
                 if tx.send(Ok(TransactionResponse {
                     transaction_id: format!("trans_{}", i),
-                    status: "completed".to_string(),
+                    status: "Completed".to_string(),
                     amount: 100.0,
                     timestamp: "2022-01-01T12:00:00Z".to_string(),
                 })).await.is_err() {
@@ -61,10 +59,12 @@ impl TransactionService for MyTransactionService {
             }
         });
 
-        Ok(Response::new(TransactionResponse {
-            success: true }))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
+
+#[derive(Default)]
+pub struct MyChatService {}
 
 #[tonic::async_trait]
 impl ChatService for MyChatService {
@@ -83,26 +83,27 @@ impl ChatService for MyChatService {
                 let reply = ChatMessage {
                     user_id: message.user_id.clone(),
                     message: format!("Terima kasih telah melakukan chat kepada CS virtual,
-                    Pesan nanda akan dibalas pada jam kerja. pesan anda : {}", message.message),
+                    Pesan anda akan dibalas pada jam kerja. pesan anda : {}", message.message),
             };
             tx.send(Ok(reply)).await.unwrap_or_else(|_| ());
             }
         });
 
-        Ok(Response::new(stream))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse().unwrap();
+    let addr = "[::1]:50051".parse()?;
     let payment_service = MyPaymentService::default();
     let transaction_service = MyTransactionService::default();
+    let chat_service = MyChatService::default();
 
     Server::builder()
         .add_service(PaymentServiceServer::new(payment_service))
         .add_service(TransactionServiceServer::new(transaction_service))
-        .add_service(ChatServiceServer::new(MyChatService::default()))
+        .add_service(ChatServiceServer::new(chat_service))
         .serve(addr)
         .await?;
 
